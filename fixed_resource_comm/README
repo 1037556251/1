@@ -1,0 +1,7 @@
+# Fixed Resource Communication System (Toy Version)
+
+## 🚀 快速开始
+```bash
+cd .\fixed_resource_comm\
+python demo.py  # 运行完整demo
+python run_all_tests.py  # 运行所有测试

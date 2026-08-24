@@ -6,15 +6,15 @@ import torch
 import numpy as np
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from modules.mother_code import MotherCode
-from modules.software_channel import SoftwareChannel
-from modules.decoder import LDPCDecoder
-from modules.erasure import Erasure
-from modules.receiver import Receiver
-from modules.input_mask import InputMask
-from modules.profile_generator import ProfileGenerator
+from fixed_resource_comm.modules.mother_code import MotherCode
+from fixed_resource_comm.modules.software_channel import SoftwareChannel
+from fixed_resource_comm.modules.decoder import LDPCDecoder
+from fixed_resource_comm.modules.erasure import Erasure
+from fixed_resource_comm.modules.receiver import Receiver
+from fixed_resource_comm.modules.input_mask import InputMask
+from fixed_resource_comm.modules.profile_generator import ProfileGenerator
 
 def test_random_tensor_forward():
     """

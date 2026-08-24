@@ -9,7 +9,7 @@ from fixed_resource_comm.modules.software_channel import SoftwareChannel
 import sys
 import os
 # 将项目根目录添加到 sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_software_channel():
     """测试软件信道的所有功能"""

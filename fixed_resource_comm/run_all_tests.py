@@ -5,8 +5,10 @@ import subprocess
 import sys
 import os
 
-# 确保工作目录是项目根目录（即本文件所在目录）
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# 获取当前文件所在目录（即 fixed_resource_comm/）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 项目根目录（fixed_resource_comm 的父目录）
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
 
 def run_all_tests():
@@ -21,38 +23,46 @@ def run_all_tests():
         "tests/test_math_toys.py",
     ]
 
-    # 调试：列出 tests/ 目录内容
-    print("tests/ 目录内容:", os.listdir("tests"))
+    # 设置子进程环境变量
+    env = os.environ.copy()
+    env['PYTHONPATH'] = PROJECT_ROOT + os.pathsep + env.get('PYTHONPATH', '')
+    env['PYTHONIOENCODING'] = 'utf-8'   # 强制 stdout/stderr 使用 UTF-8
 
     print("=" * 60)
     print("运行所有测试")
     print("=" * 60)
 
     all_passed = True
-
     for test_file in test_files:
+        abs_path = os.path.join(BASE_DIR, test_file)
         print(f"\n运行测试: {test_file}")
         print("-" * 40)
 
-        # 检查文件是否存在
-        if not os.path.exists(test_file):
-            print(f"✗ 文件不存在: {test_file}")
+        if not os.path.exists(abs_path):
+            print(f"✗ 文件不存在: {abs_path}")
             all_passed = False
             continue
 
         try:
+            # 使用 UTF-8 解码，忽略错误（避免个别特殊字符导致崩溃）
             result = subprocess.run(
-                [sys.executable, test_file],
+                [sys.executable, abs_path],
                 capture_output=True,
                 text=True,
                 check=True,
-                encoding="utf-8"
+                env=env,
+                encoding='utf-8',
+                errors='ignore'   # 忽略无法解码的字符
             )
             print(result.stdout)
             print(f"✓ {test_file} 测试通过")
         except subprocess.CalledProcessError as e:
             print(f"✗ {test_file} 测试失败")
-            print(f"错误输出:\n{e.stderr}")
+            # 错误输出也可能有特殊字符，同样忽略
+            if e.stderr:
+                print("错误输出:", e.stderr)
+            else:
+                print("（无错误输出）")
             all_passed = False
 
     print("\n" + "=" * 60)

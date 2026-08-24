@@ -8,7 +8,10 @@ import numpy as np
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
 
 from fixed_resource_comm.fixtures.math_functions import (
     compute_R0, compute_d_k, compute_w_k, compute_p_e_k,

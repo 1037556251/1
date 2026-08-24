@@ -7,7 +7,8 @@ import torch
 import numpy as np
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from fixed_resource_comm.modules.mother_code import MotherCode
 from fixed_resource_comm.modules.software_channel import SoftwareChannel
 from fixed_resource_comm.modules.decoder import LDPCDecoder

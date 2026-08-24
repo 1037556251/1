@@ -6,7 +6,8 @@ import torch
 import numpy as np
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from fixed_resource_comm.modules.decoder import LDPCDecoder
 from fixed_resource_comm.modules.erasure import Erasure
 from fixed_resource_comm.modules.profile_generator import ProfileGenerator
