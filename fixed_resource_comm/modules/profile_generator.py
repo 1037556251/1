@@ -98,28 +98,25 @@ class ProfileGenerator:
                 f"Profile {profile_id}: q[{k}]={q_list[k]} > n[{k}]={n_list[k]}"
 
         # 生成确定性的hash
+        # 生成确定性的hash
         profile_str = f"{profile_id}_{profile_type}_{str(q_list)}_{str(n_list)}"
         profile_hash = hashlib.sha256(profile_str.encode()).hexdigest()[:16]
+
+        # 生成确定性的mask（128 bits）
+        mask = self._generate_mask(profile_id, profile_type, q_list, n_list)
+
         return {
             'id': profile_id,
             'type': profile_type,
             'q': q_list,
             'n': n_list,
             'hash': profile_hash,
+            'mask': mask,  # 新增：128 bits的mask
             'validated': True,
             'n_total': total_n,  # sum(n_k) = 8064
             'N0': N0,  # N0 = 8064 + 128 = 8192
             'header': 128  # header固定128 bits
         }
-        # return {
-        #     'id': profile_id,
-        #     'type': profile_type,
-        #     'q': q_list,
-        #     'n': n_list,
-        #     'hash': profile_hash,
-        #     'validated': True
-        # }
-        #
 
     def _generate_all_profiles(self) -> List[Dict]:
         """生成全部13个profile

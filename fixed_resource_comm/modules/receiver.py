@@ -51,14 +51,33 @@ class Receiver:
             stats: 接收统计信息
         """
         stats = {}
-        batch_size = received_bits.shape
+        batch_size = received_bits.shape[0]  # 修正：取第一个维度
 
         # 1. 解码
         decoded_bits = self.decoder.decode(received_bits, n_total, q_bits)
         stats['decoded_shape'] = decoded_bits.shape
 
-        # 2. 擦除恢复（如果需要）
-        if use_erasure and erasure_pattern is not None:
+        # 2. 检测解码失败：如果解码结果全为0或全为1，视为解码失败
+        decoding_failed = self._check_decoding_failure(decoded_bits, received_bits)
+        stats['decoding_failed'] = decoding_failed
+
+        if decoding_failed:
+            # 统一走erasure函数处理解码失败
+            erased_bits = self.erasure.apply_erasure(decoded_bits)
+            stats['erasure_applied'] = True
+            stats['erasure_mode'] = 'random_erasure'
+
+            # 尝试恢复擦除
+            if self.enable_erasure_recovery:
+                decoded_bits = self.erasure.recover_erasure(erased_bits, decoded_bits)
+                stats['recovery_applied'] = True
+            else:
+                stats['recovery_applied'] = False
+        else:
+            stats['erasure_applied'] = False
+
+        # 3. 擦除恢复（如果需要，且未被上面的解码失败处理覆盖）
+        if use_erasure and erasure_pattern is not None and not decoding_failed:
             erased_bits = self.erasure.apply_pattern_erasure(decoded_bits, erasure_pattern)
             stats['erasure_count'] = (erased_bits == -1).sum().item()
 
@@ -69,19 +88,61 @@ class Receiver:
             else:
                 stats['recovery_applied'] = False
 
-        # 3. 错误检测（如果需要）
+        # 4. 错误检测（如果需要）
         if self.enable_error_detection:
             # 简单的奇偶校验检测
             parity = decoded_bits.sum(dim=-1) % 2
             stats['parity_errors'] = (parity != 0).sum().item()
 
-        # 4. 截取到q_bits
+        # 5. 截取到q_bits
         if decoded_bits.shape[1] > q_bits:
             decoded_bits = decoded_bits[:, :q_bits]
 
         stats['final_shape'] = decoded_bits.shape
 
         return decoded_bits, stats
+
+    def _check_decoding_failure(self, decoded_bits: torch.Tensor, received_bits: torch.Tensor) -> bool:
+        """
+        检测解码是否失败
+
+        解码失败的标准:
+        1. 解码结果全为0
+        2. 解码结果全为1
+        3. 解码结果与接收比特无相关性（差值过大）
+
+        Args:
+            decoded_bits: 解码后的比特
+            received_bits: 接收到的原始比特
+
+        Returns:
+            bool: 是否解码失败
+        """
+        # 基本维度检查
+        assert decoded_bits.dim() == 2 and received_bits.dim() == 2, "Expected 2D tensors"
+        assert decoded_bits.shape[0] == received_bits.shape[0], "Batch sizes must match"
+
+        batch_size = decoded_bits.shape[0]  # ✅ 修正
+
+        # 标准1: 全0或全1（任一样本满足即失败）
+        if torch.any(torch.all(decoded_bits == 0, dim=1)) or torch.any(torch.all(decoded_bits == 1, dim=1)):
+            return True
+
+        # 标准2: 差异比例 > 50%
+        min_len = min(decoded_bits.shape[1], received_bits.shape[1] ) # ✅ 移除 @ref
+        diff_ratio = (decoded_bits[:, :min_len] != received_bits[:, :min_len]).float().mean()
+        if diff_ratio > 0.5:
+            return True
+
+        # 标准3: 相关性接近0（可选，取消注释启用）
+        # x = decoded_bits[:, :min_len].flatten().float()
+        # y = received_bits[:, :min_len].flatten().float()
+        # denominator = torch.std(x) * torch.std(y)
+        # corr = torch.corrcoef(torch.stack([x, y]))[0, 1] if denominator != 0 else 0.0
+        # if torch.abs(corr) < 0.1:
+        #     return True
+
+        return False
 
     def get_receiver_info(self) -> Dict:
         """返回接收器信息"""
