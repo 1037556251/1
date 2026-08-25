@@ -41,6 +41,9 @@ fixed_resource_comm/
 安装依赖
 pip install -r requirements.txt
 
+转到项目路径
+cd .\fixed_resource_comm\
+
 运行演示
 python demo.py
 
