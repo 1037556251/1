@@ -1,0 +1,140 @@
+# ============================================
+# Toy版本固定资源通信接口配置文件
+# 所有模块都从这个文件读取参数
+# ============================================
+
+# 全局参数
+toy:
+  batch: 4                # 默认batch大小
+  M: 128                  # 最大角色数量（预留）
+  K: 8                    # 实际使用的角色数量（8个角色）
+  N0: 8192                # 总资源bits数
+  d_x: 16                 # 输入特征维度（可配置，toy阶段默认16）
+  hidden_dim: 128         # 内部统一投影维度
+  codec_dim: 32           # 输出codec vector维度
+
+
+# 母码参数（用于 LDPC 编码）
+mother_code:
+  k: 16      # 信息位长度，需 >= 最大 q_bits (256)
+  n: 32     # 码长，需 >= 最大 n_total (1264)
+
+# Profile生成参数
+profile:
+  header_bits: 128        # 固定头部bits
+  payload_bits: 8064      # 有效载荷 = N0 - header = 8192 - 128
+  profiles:
+    - id: 0               # Uniform profile
+      type: uniform
+      description: "所有角色均匀分配"
+      params:
+        role_q: 192
+        role_n: 1008
+
+    - id: 1               # Single-emphasis profile 1
+      type: single_emphasis
+      description: "强调角色0，其他4个角色做donor"
+      params:
+        target_role: 0
+        target_q: 256
+        target_n: 1264
+        donor_q: 160
+        donor_n: 944
+        other_q: 192
+        other_n: 1008
+
+    - id: 2               # Single-emphasis profile 2
+      type: single_emphasis
+      description: "强调角色1，其他4个角色做donor"
+      params:
+        target_role: 1
+        target_q: 256
+        target_n: 1264
+        donor_q: 160
+        donor_n: 944
+        other_q: 192
+        other_n: 1008
+
+    # 继续定义 id=3..8 的single-emphasis profiles（目标角色2-7）
+    # 这里为了简洁，先只定义到id=2，后续您再补充完整
+
+    - id: 9               # Paired-emphasis profile 1
+      type: paired_emphasis
+      description: "同时强调角色0和1"
+      params:
+        target_roles: [0, 1]
+        targets_q: 224
+        targets_n: 1136
+        donor_q: 160
+        donor_n: 944
+        other_q: 192
+        other_n: 1008
+
+    - id: 10              # Paired-emphasis profile 2
+      type: paired_emphasis
+      description: "同时强调角色2和3"
+      params:
+        target_roles: [2, 3]
+        targets_q: 224
+        targets_n: 1136
+        donor_q: 160
+        donor_n: 944
+        other_q: 192
+        other_n: 1008
+
+    # 继续定义 id=11,12 的paired-emphasis profiles
+
+# 信道参数
+channel:
+  type: QPSK_AWGN         # 只实现QPSK+AWGN
+  snr_db: 10.0             # 信噪比（可配置）
+  random_seed: 42         # 固定随机种子，保证可复现
+
+# 解码器参数
+decoder:
+  algorithm: LDPC
+  max_iterations: 10      # 固定10次迭代，禁止early stop
+  # 使用小型固定校验矩阵，暂时用commpy的默认矩阵
+
+# 测试参数
+test:
+  structural:
+    batch_sizes: [1, 4, 8]  # 测试不同batch大小
+  math_toy:
+    small_batch: 2
+    small_roles: 3
+    small_bits: 16
+
+# 模型配置
+model:
+  d_model: 128  # 投影维度
+  d_x: 64       # 输入维度
+  M: 128        # 最大角色数
+  group_size: 16 # 固定分组：每16个角色一组
+  K: 8          # 实际角色数
+  codec_dim: 32 # 压缩后codec vector维度
+  codebook_size: 256  # 码本大小
+
+# 输入配置
+input:
+  batch_size: 4
+  M: 128
+  d_x: 64
+
+# 擦除配置
+erasure:
+  probability: 0.1
+  soft_threshold: 0.5 # |noisy I/Q| below this value is marked as erased
+  max_erasure_rate: 0.3
+
+# 接收器配置
+receiver:
+  module: "Receiver"
+  enable_erasure_recovery: true
+  enable_error_detection: true
+
+# 性能配置
+performance:
+  device: "cpu"
+  enable_profile: false
+  log_level: "INFO"

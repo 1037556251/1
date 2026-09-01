@@ -7,7 +7,7 @@ import torch
 import numpy as np
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 from modules.mother_code import MotherCode
 from modules.software_channel import SoftwareChannel
