@@ -1,4 +1,4 @@
-"""Hand-built tests for the small non-negative LP interface."""
+"""小规模非负 LP 接口的手工构造测试。"""
 
 import numpy as np
 
@@ -6,7 +6,7 @@ from modules.math_functions import solve_lp_small_scale
 
 
 def test_lp_inequality_and_nonnegativity():
-    """Minimize x+2y subject to x+y >= 4 and x,y >= 0."""
+    """在 x+y >= 4 且 x、y >= 0 的约束下最小化 x+2y。"""
     result = solve_lp_small_scale({
         "c": np.array([1.0, 2.0]),
         "A_ub": np.array([[-1.0, -1.0]]),
@@ -20,7 +20,7 @@ def test_lp_inequality_and_nonnegativity():
 
 
 def test_lp_equality_and_nonnegativity():
-    """Minimize x+3y subject to x+y=5 and x,y >= 0."""
+    """在 x+y=5 且 x、y >= 0 的约束下最小化 x+3y。"""
     result = solve_lp_small_scale({
         "c": np.array([1.0, 3.0]),
         "A_eq": np.array([[1.0, 1.0]]),
@@ -34,7 +34,7 @@ def test_lp_equality_and_nonnegativity():
 
 
 def test_lp_mixed_constraints_and_explicit_bounds():
-    """Check >= demand, upper bounds, equality feasibility, and non-negativity."""
+    """验证大于等于需求、上界、可行性和非负性约束。"""
     result = solve_lp_small_scale({
         "c": np.array([1.0, 1.0]),
         "A_ub": np.array([[-1.0, -1.0]]),  # x+y >= 3

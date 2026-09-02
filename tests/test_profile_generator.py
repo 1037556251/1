@@ -17,28 +17,28 @@ def test_profiles():
     # 初始化
     generator = ProfileGenerator()
 
-    # 获取所有profile
+    # 获取所有 profile
     profiles = generator.get_all_profiles()
 
-    # 验证1：总共13个profile
+    # 验证 1：总共 13 个 profile
     assert len(profiles) == 13, f"应该生成13个profile，但生成了{len(profiles)}个"
     print(f"\n✓ 生成了 {len(profiles)} 个profile")
 
-    # 验证2：每个profile的sum(n)等于8064
+    # 验证 2：每个 profile 的 sum(n) 等于 8064
     for profile in profiles:
         total_n = sum(profile['n'])
         assert total_n == 8064, f"Profile {profile['id']}: sum(n)={total_n} != 8064"
     print("✓ 所有profile的sum(n)都等于8064")
 
-    # 验证3：每个profile的q_k <= n_k
+    # 验证 3：每个 profile 的 q_k <= n_k
     for profile in profiles:
         for k in range(8):
             assert profile['q'][k] <= profile['n'][k], \
                 f"Profile {profile['id']}: q[{k}]={profile['q'][k]} > n[{k}]={profile['n'][k]}"
     print("✓ 所有profile的q_k <= n_k")
 
-    # 验证4：每个profile的hash是确定性的
-    # 重新生成一次，hash应该相同
+    # 验证 4：每个 profile 的哈希值是确定性的
+    # 重新生成一次，哈希值应该相同
     generator2 = ProfileGenerator()
 
     profiles2 = generator2.get_all_profiles()
@@ -47,7 +47,7 @@ def test_profiles():
             f"Profile {p1['id']}: hash不一致！{p1['hash']} vs {p2['hash']}"
     print("✓ 所有profile的hash是确定性的")
 
-    # 打印所有profile的详细信息
+    # 打印所有 profile 的详细信息
     print("\n" + "=" * 60)
     print("所有Profile详细信息")
     print("=" * 60)

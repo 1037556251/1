@@ -1,4 +1,4 @@
-"""Learnable projection from role features to codec vectors."""
+"""将角色特征可学习地投影为 codec 向量。"""
 
 import torch
 from torch import nn
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 class Quantizer(nn.Module):
-    """Apply d_x -> 128 -> codec_dim independently to every role."""
+    """将 d_x 维输入投影到 128 维，再量化到 codec_dim；已是 128 维时跳过首层投影。"""
 
     def __init__(self, config_path: str = "config/toy_config.yaml"):
         super().__init__()
@@ -27,7 +27,7 @@ class Quantizer(nn.Module):
         self.codebook = nn.Parameter(torch.randn(self.codebook_size, self.codec_dim))
 
     def quantize(self, input_tensor: torch.Tensor) -> torch.Tensor:
-        """Return [batch, M, 32] from either [batch, M, d_x] or [batch, M, 128]."""
+        """从 [batch, M, d_x] 或 [batch, M, 128] 返回 [batch, M, 32]。"""
         if input_tensor.ndim != 3:
             raise ValueError("input_tensor must be a 3-D tensor")
         if input_tensor.shape[-1] == self.d_x:

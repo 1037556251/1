@@ -1,4 +1,4 @@
-"""Unified erasure detection based on received soft information."""
+"""基于接收软信息的统一擦除检测。"""
 
 import os
 from typing import Optional
@@ -8,7 +8,7 @@ import torch
 def erasure_function(received_bits: torch.Tensor,
                      soft_information: Optional[torch.Tensor] = None,
                      threshold: float = 0.5) -> torch.Tensor:
-    """Mark unreliable received bits; transmitted/source bits are never used."""
+    """标记不可靠的接收比特；不使用发送端或源比特。"""
     if received_bits.ndim != 2:
         raise ValueError("received_bits must be [batch, n_bits]")
     if soft_information is None:
@@ -38,7 +38,7 @@ class Erasure:
         return self.erasure_pattern
 
     def apply_erasure(self, bits: torch.Tensor, probability: Optional[float] = None) -> torch.Tensor:
-        """Legacy random helper retained for compatibility; not used by receive()."""
+        """保留随机擦除辅助接口以兼容旧代码；receive() 不使用此方法。"""
         if probability is None:
             probability = self.erasure_probability
         mask = torch.rand(bits.shape, device=bits.device) < probability
@@ -60,11 +60,10 @@ class Erasure:
 
     def recover_erasure(self, erased_bits: torch.Tensor,
                         known_bits: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Keep marks in the receiver path; retain old explicit recovery API.
+        """在接收路径中保留擦除标记，同时兼容旧的显式恢复接口。
 
-        ``known_bits`` is accepted only for backward compatibility with the
-        old standalone helper tests.  The real receive path never supplies it,
-        so noisy received bits are never replaced by source/truth bits.
+        ``known_bits`` 仅为兼容旧的独立辅助测试而接受。真实接收路径不会
+        传入该参数，因此含噪接收比特不会被源比特或正确比特替换。
         """
         if known_bits is not None:
             recovered = erased_bits.clone()

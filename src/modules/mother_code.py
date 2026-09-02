@@ -1,6 +1,6 @@
 """
-母码接口模块
-实现LDPC编码、缩短（shortening）和打孔（puncturing）操作
+母码接口模块。
+提供母码接口、profile 分段编码、缩短和打孔操作；profile 路径使用固定稀疏校验矩阵生成校验位。
 """
 
 import numpy as np
@@ -12,11 +12,11 @@ from typing import List, Optional, Sequence
 class MotherCode:
     def __init__(self, config_path: str = None):
         """初始化母码接口
-        Args:
+        参数：
             config_path: 配置文件路径
         """
         if config_path is None:
-            # 使用相对于本文件的路径：上一级目录下的 config/toy_config.yaml
+            # 使用相对于本文件的路径定位项目根目录下的配置文件。
             module_dir = os.path.dirname(os.path.abspath(__file__))
             config_path = os.path.join(module_dir, '..', '..', 'configs', 'toy_config.yaml')
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -38,7 +38,7 @@ class MotherCode:
 
     # def __init__(self, config_path: str = "config/toy_config.yaml"):
     # """初始化母码接口
-    #        Args:
+    #        参数：
     #            config_path: 配置文件路径
     #        """
     #     import yaml
@@ -63,7 +63,7 @@ class MotherCode:
         self.H = H
 
     def _parity_projection(self, q_bits: int, parity_bits: int) -> torch.Tensor:
-        """Return a deterministic sparse matrix P used by H=[P.T | I]."""
+        """返回用于 H=[P.T | I] 的确定性稀疏矩阵 P。"""
         if q_bits <= 0 or parity_bits < 0:
             raise ValueError("q_bits must be positive and parity_bits non-negative")
         generator = np.random.RandomState(42 + q_bits * 1009 + parity_bits)
@@ -77,7 +77,7 @@ class MotherCode:
     @staticmethod
     def _profile_header(profile_id: int, device: torch.device,
                         dtype: torch.dtype) -> torch.Tensor:
-        """Encode profile_id as 32 MSB-first bits followed by zero padding."""
+        """将 profile_id 编码为 32 位高位优先比特，后面补零。"""
         if not 0 <= profile_id < 2 ** 32:
             raise ValueError("profile_id must fit in 32 bits")
         bits = [(profile_id >> (31 - i)) & 1 for i in range(32)] + [0] * 96
@@ -86,13 +86,12 @@ class MotherCode:
     def encode_profile(self, source_bits: torch.Tensor,
                        q_list: Sequence[int], n_list: Sequence[int],
                        profile_id: int = 0) -> torch.Tensor:
-        """Encode eight role payloads and prepend a 128-bit profile header.
+        """编码八个角色的载荷，并在前面添加 128 位 profile 头部。
 
-        ``source_bits`` is flattened as ``[role0 q0, role1 q1, ...]``.  For
-        role k the codeword is ``[u_k, u_k @ P_k (mod 2)]`` and has exactly
-        ``n_k`` bits.  Since the parity part is generated from a fixed sparse
-        P_k, the resulting words satisfy the corresponding parity-check
-        matrix ``H_k=[P_k.T | I]``.
+        ``source_bits`` 按 ``[role0 q0, role1 q1, ...]`` 展平。角色 k 的码字
+        为 ``[u_k, u_k @ P_k (mod 2)]``，长度恰好为 ``n_k``。由于校验部分
+        由固定稀疏矩阵 P_k 生成，所得码字满足对应的校验矩阵
+        ``H_k=[P_k.T | I]``。
         """
         if source_bits.ndim != 2:
             raise ValueError("source_bits must have shape [batch, sum(q_k)]")
@@ -128,12 +127,12 @@ class MotherCode:
         return encoded
 
     def encode_from_profile(self, source_bits: torch.Tensor, profile: Dict) -> torch.Tensor:
-        """Convenience wrapper accepting a ProfileGenerator dictionary."""
+        """提供接受 ProfileGenerator 字典的便捷封装。"""
         return self.encode_profile(source_bits, profile['q'], profile['n'], profile.get('id', 0))
 
     def check_profile_codeword(self, encoded_bits: torch.Tensor,
                                q_list: Sequence[int], n_list: Sequence[int]) -> torch.Tensor:
-        """Return per-batch parity validity for the payload (header ignored)."""
+        """返回每个 batch 样本的载荷校验结果（忽略头部）。"""
         if encoded_bits.ndim != 2 or encoded_bits.shape[1] != 128 + sum(n_list):
             raise ValueError("encoded_bits must include the 128-bit header")
         offset = 128
@@ -171,12 +170,12 @@ class MotherCode:
     #     self.m = 16  # 校验位长度
 
     def _get_generator_matrix(self) -> np.ndarray:
-        """从校验矩阵生成生成矩阵
+        """从校验矩阵生成生成矩阵。
 
-        使用系统形式的生成矩阵 G = [I | P]
+        使用系统形式的生成矩阵 G = [I | P]。
 
-        Returns:
-            G: 生成矩阵，shape (k, n)
+        返回：
+            G：生成矩阵，形状为 (k, n)。
         """
         k = self.k
         n = self.n
@@ -188,7 +187,7 @@ class MotherCode:
         for i in range(k):
             G[i, i] = 1
 
-        # 校验部分 (P) - 使用随机矩阵（固定种子）
+        # 校验部分（P）使用固定种子的随机矩阵。
         np.random.seed(123)  # 固定种子保证可复现
         for i in range(k):
             for j in range(k, n):
@@ -198,19 +197,19 @@ class MotherCode:
 
     # def encode(self, source_bits: torch.Tensor,
     #            n_total: int, q_bits: int) -> torch.Tensor:
-    #     """执行LDPC编码（包含缩短和打孔）
+    #     """执行 LDPC 编码（包含缩短和打孔）
     #
     #     编码流程：
-    #     1. 缩短（Shortening）：将q_bits填充到k位
+    #     1. 缩短：将 q_bits 填充到 k 位
     #     2. LDPC编码：生成n位码字
-    #     3. 打孔（Puncturing）：从n位中取出n_total位
+    #     3. 打孔：从 n 位中取出 n_total 位
     #
-    #     Args:
+    #     参数：
     #         source_bits: 源比特，shape [batch, q_bits]
     #         n_total: 期望输出的总比特数
     #         q_bits: 源比特数（信息位）
     #
-    #     Returns:
+    #     返回：
     #         encoded_bits: 编码后的比特，shape [batch, n_total]
     #     """
     #     # 修正：使用shape[0]获取batch_size（整数）
@@ -254,16 +253,16 @@ class MotherCode:
     #     """执行LDPC解码（包含解打孔和解缩短）
     #
     #     解码流程：
-    #     1. 解打孔：将n_total位填充回n位
+    #     1. 解打孔：将 n_total 位填充回 n 位
     #     2. 使用生成矩阵进行解码
-    #     3. 解缩短：从k位中取出q_bits位
+    #     3. 解缩短：从 k 位中取出 q_bits 位
     #
-    #     Args:
+    #     参数：
     #         received_bits: 接收到的比特，shape [batch, n_total]
     #         n_total: 接收到的总比特数
     #         q_bits: 期望的源比特数
     #
-    #     Returns:
+    #     返回：
     #         decoded_bits: 解码后的比特，shape [batch, q_bits]
     #     """
     #     # 修正：使用shape[0]获取batch_size（整数）
@@ -303,16 +302,16 @@ class MotherCode:
                n_list: Optional[Sequence[int]] = None,
                profile_id: int = 0) -> torch.Tensor:
         """
-        Encode using either the legacy scalar interface or a role profile.
+        执行编码，支持旧版标量接口或按角色 profile 编码。
 
-        When q_list/n_list are supplied (or when n_total and q_bits are
-        sequences), the result includes the 128-bit header and is exactly
-        ``128 + sum(n_k)`` bits.  The scalar form is retained for old callers.
-        Args:
+        当提供 q_list/n_list（或 n_total、q_bits 为序列）时，返回值包含
+        128 位头部，长度严格为
+               ``128 + sum(n_k)`` 位。标量形式保留用于兼容旧调用方。
+        参数：
             source_bits: [batch, q_bits]
             n_total: 总码长
             q_bits: 信息位长度
-        Returns:
+        返回：
             encoded: [batch, n_total]
         """
         if q_list is not None or n_list is not None or isinstance(n_total, (list, tuple)):
@@ -322,7 +321,7 @@ class MotherCode:
 
         batch_size = source_bits.shape[0]
         encoded = torch.zeros(batch_size, n_total, dtype=source_bits.dtype, device=source_bits.device)
-        # 直接放置信息位在最前面
+        # 将信息位直接放在输出的最前面。
         encoded[:, :q_bits] = source_bits
         return encoded
 
@@ -330,25 +329,25 @@ class MotherCode:
                n_total: int, q_bits: int) -> torch.Tensor:
         """
         Toy 版本：解码，直接截取前 q_bits 作为信息位。
-        Args:
+        参数：
             received_bits: [batch, n_total]
             n_total: 总码长（仅用于接口统一）
             q_bits: 信息位长度
-        Returns:
+        返回：
             decoded: [batch, q_bits]
         """
         return received_bits[:, :q_bits]
 
     def apply_source_mask(self, bits: torch.Tensor,
                           mask: torch.Tensor) -> torch.Tensor:
-        """应用source mask
+        """应用源掩码
 
-        Args:
+        参数：
             bits: 输入比特，shape [batch, K, max_n]
-            mask: source mask，shape [batch, K, max_n]
+            mask：源掩码，shape [batch, K, max_n]
 
-        Returns:
-            masked_bits: 应用mask后的比特，shape [batch, K, max_n]
+        返回：
+            masked_bits：应用掩码后的比特，shape [batch, K, max_n]
         """
         return bits * mask
 
@@ -363,15 +362,15 @@ class MotherCode:
         }
 
     def shortening(self, encoded_bits: torch.Tensor, n_shorten: int) -> torch.Tensor:
-        """Shortening接口：减少source bits
+        """缩短接口：减少源比特。
 
         将编码后的比特中，高有效位的比特设置为0（表示这些位置不发送信息）
 
-        Args:
+        参数：
             encoded_bits: 编码后的比特，shape [batch, n]
             n_shorten: 要缩短的比特数
 
-        Returns:
+        返回：
             shortened_bits: 缩短后的比特，shape [batch, n]
         """
         # 高有效位向低有效位扩展，将前n_shorten位设为0
@@ -380,15 +379,15 @@ class MotherCode:
         return shortened_bits
 
     def puncturing(self, encoded_bits: torch.Tensor, n_puncture: int) -> torch.Tensor:
-        """Puncturing接口：减少发送保护位
+        """打孔接口：减少发送保护位。
 
         从编码后的比特中移除指定数量的比特（不发送这些位置）
 
-        Args:
+        参数：
             encoded_bits: 编码后的比特，shape [batch, n]
             n_puncture: 要移除的比特数
 
-        Returns:
+        返回：
             punctured_bits: 穿刺后的比特，shape [batch, n - n_puncture]
         """
         # 移除最后n_puncture个比特（保护位）
@@ -398,11 +397,11 @@ class MotherCode:
         """
         减少source bits，高有效位向低有效位扩展
 
-        Args:
+            参数：
             encoded_bits: 编码后的比特，shape [batch, n]
             n_shorten: 要缩短的比特数
 
-        Returns:
+            返回：
             shortened_bits: 缩短后的比特，shape [batch, n]
         """
         shortened_bits = encoded_bits.clone()
@@ -414,11 +413,11 @@ class MotherCode:
         """
         减少发送保护位，从编码后的比特中移除指定数量的比特
 
-        Args:
+            参数：
             encoded_bits: 编码后的比特，shape [batch, n]
             n_puncture: 要移除的比特数
 
-        Returns:
+            返回：
             punctured_bits: 穿刺后的比特，shape [batch, n - n_puncture]
         """
         # 移除最后n_puncture个比特（保护位）

@@ -1,4 +1,4 @@
-"""Structural tests for the complete fixed-resource communication path."""
+"""完整固定资源通信链路的结构测试。"""
 
 import numpy as np
 import torch
@@ -17,16 +17,17 @@ CONFIG = str(Path(__file__).resolve().parents[1] / "configs" / "toy_config.yaml"
 
 
 def _codec_source(codec: torch.Tensor, q_list) -> torch.Tensor:
-    """Flatten each block of 16 codec vectors and take its q_k leading bits."""
+    """将每个包含 16 个 codec 向量的分组展平，并取其前 q_k 个比特。"""
     role_bits = (codec.reshape(codec.shape[0], 8, 16 * 32) > 0).float()
     return torch.cat([role_bits[:, k, :q] for k, q in enumerate(q_list)], dim=1)
 
 
 def test_complete_forward_pipeline():
-    """Input → Group/Query → Quantizer → profile → code → channel → receive."""
+    """测试 Input → Group/Query → Quantizer → profile → 编码 → 信道 → 接收。"""
     torch.manual_seed(7)
-    inputs = torch.randn(2, 128, 64)
     input_mask = InputMask(CONFIG)
+    inputs = input_mask.generate_random_tensor(batch_size=2)
+    assert inputs.shape == (2, 128, 64)
     profile = ProfileGenerator(CONFIG).get_profile(0)
     group_query = GroupQuery(CONFIG)
     quantizer = Quantizer(CONFIG)
@@ -49,7 +50,7 @@ def test_complete_forward_pipeline():
 
 
 def test_all_profiles_have_8192_output_bits():
-    """Every one of the 13 profiles occupies header plus 8064 payload bits."""
+    """验证 13 个 profile 均由头部和 8064 个载荷比特组成。"""
     mother_code = MotherCode(CONFIG)
     profiles = ProfileGenerator(CONFIG).get_all_profiles()
     for profile in profiles:
@@ -60,7 +61,7 @@ def test_all_profiles_have_8192_output_bits():
 
 
 def test_noiseless_round_trip_is_exact():
-    """Infinite-SNR transmission preserves all profile information bits."""
+    """验证无穷 SNR 传输能够保留 profile 的全部信息比特。"""
     torch.manual_seed(8)
     profile = ProfileGenerator(CONFIG).get_profile(9)
     mother_code = MotherCode(CONFIG)
@@ -77,7 +78,7 @@ def test_noiseless_round_trip_is_exact():
 
 
 def test_fixed_seed_noise_is_reproducible():
-    """The configured channel seed produces identical noisy observations."""
+    """验证使用配置中的信道种子会产生完全相同的含噪观测。"""
     bits = torch.randint(0, 2, (2, 1024)).float()
     first = SoftwareChannel(CONFIG).transmit(bits)
     second = SoftwareChannel(CONFIG).transmit(bits)
@@ -85,7 +86,7 @@ def test_fixed_seed_noise_is_reproducible():
 
 
 def test_synchronized_group_profile_and_embedding_permutation():
-    """Permuting whole groups and reversing it preserves all equivariant outputs."""
+    """验证整组置换并执行逆置换后，所有等变输出保持一致。"""
     torch.manual_seed(9)
     group_query = GroupQuery(CONFIG)
     quantizer = Quantizer(CONFIG)

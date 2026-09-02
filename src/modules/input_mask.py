@@ -1,6 +1,6 @@
 """
 输入处理与掩码生成模块
-负责生成随机tensor和source mask
+负责生成随机张量和源掩码
 """
 
 import torch
@@ -12,7 +12,7 @@ class InputMask:
     def __init__(self, config_path: str = None):
         """初始化InputMask模块
 
-        Args:
+        参数：
             config_path: 配置文件路径
         """
         '''with open(config_path, 'r') as f:
@@ -31,10 +31,10 @@ class InputMask:
     def generate_random_tensor(self, batch_size: Optional[int] = None) -> torch.Tensor:
         """生成随机输入 tensor
 
-        Args:
+        参数：
             batch_size: 可选的batch大小，默认使用配置文件中的值
 
-        Returns:
+        返回：
             tensor: shape [batch_size, M, d_x]
         """
         if batch_size is None:
@@ -45,17 +45,17 @@ class InputMask:
     def generate_source_mask(self,
                              profile: Dict,
                              batch_size: Optional[int] = None) -> torch.Tensor:
-        """根据profile生成source mask
+        """根据 profile 生成源掩码
 
-        Source mask规则：
+        源掩码规则：
         - 高有效位向低有效位扩展
-        - 1表示源比特位置，0表示缩短填充位置
+        - 1 表示源比特位置，0 表示缩短填充位置
 
-        Args:
-            profile: profile字典，包含q和n列表
-            batch_size: batch大小
+        参数：
+            profile：profile 字典，包含 q 和 n 列表
+            batch_size：批次大小
 
-        Returns:
+        返回：
             mask: shape [batch_size, K, max_n]，其中max_n是profile中最大的n_k
         """
         if batch_size is None:
@@ -65,7 +65,7 @@ class InputMask:
         n_list = profile['n']
         max_n = max(n_list)
 
-        # 创建mask
+        # 创建掩码
         mask = torch.zeros(batch_size, self.K, max_n)
 
         for k in range(self.K):
@@ -76,7 +76,7 @@ class InputMask:
             mask[:, k, :q_k] = 1
 
             # 低有效位（从q_k到n_k-1）是缩短填充，保持0
-            # 注意：超过n_k的部分也保持0，这是puncturing的效果
+            # 注意：超过 n_k 的部分也保持 0，这是打孔效果
 
         return mask
 

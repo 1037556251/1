@@ -26,7 +26,7 @@ def test_shortening():
     source_bits = torch.randint(0, 2, (batch_size, q_bits), dtype=torch.float32)
     encoded_bits = mother_code.encode(source_bits, n, q_bits)
 
-    # 测试shortening
+    # 测试缩短
     n_shorten = 10
     shortened_bits = mother_code.shortening(encoded_bits, n_shorten)
 
@@ -52,7 +52,7 @@ def test_puncturing():
     source_bits = torch.randint(0, 2, (batch_size, q_bits), dtype=torch.float32)
     encoded_bits = mother_code.encode(source_bits, n, q_bits)
 
-    # 测试puncturing
+    # 测试打孔
     n_puncture = 10
     punctured_bits = mother_code.puncturing(encoded_bits, n_puncture)
 
@@ -138,7 +138,7 @@ def test_mother_code():
     accuracy_short = (decoded_short == source_bits_short).float().mean()
     print(f"  缩短后解码准确率: {accuracy_short.item():.4f}")
 
-    # 测试4：Source Mask应用
+    # 测试 4：应用源掩码
     print("\n[测试4] Source Mask测试")
     max_n = n
     mask = torch.zeros(batch_size, 8, max_n)
@@ -155,12 +155,12 @@ def test_mother_code():
     print(f"  应用mask后的非零元素数: {actual_nonzero}")
     print(f"  期望的非零元素数: {expected_nonzero}")
 
-    # 验证mask应用
+    # 验证掩码应用
     assert actual_nonzero == expected_nonzero, \
         f"Mask应用错误: {actual_nonzero} != {expected_nonzero}"
     print("  ✓ Source Mask应用正确")
 
-    # 测试5：不同profile的编码解码
+    # 测试 5：不同 profile 的编码解码
     print("\n[测试5] 不同profile的编码解码测试")
     test_profiles = [
         {'q': [k] * 8, 'n': [n] * 8, 'name': 'Uniform'},

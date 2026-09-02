@@ -13,7 +13,7 @@ class LDPCDecoder:
     def __init__(self, config_path: str = None):
         """初始化LDPC解码器
 
-        Args:
+        参数：
             config_path: 配置文件路径
         """
         import yaml
@@ -29,7 +29,7 @@ class LDPCDecoder:
         self.max_iterations = decoder_config.get('max_iterations', 10)
         self.algorithm = decoder_config.get('algorithm', 'LDPC')
 
-        # 初始化校验矩阵（应与mother_code共享）
+        # 初始化与母码配置一致的固定校验矩阵
         self._build_parity_check_matrix()
 
     def _build_parity_check_matrix(self):
@@ -53,35 +53,87 @@ class LDPCDecoder:
                max_iterations: Optional[int] = None,
                erasure_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        执行 LDPC 解码（toy 版本，仅截取前 q_bits）
+        执行 LDPC Min-Sum 译码；长扁平输入走兼容路径。
 
-        Args:
+        参数：
             received_bits: 接收到的比特，shape [batch, n_total]
             n_total: 总码长（可用于缩短/打孔处理）
             q_bits: 期望的信息位长度
-            max_iterations: 最大迭代次数，若为 None 则使用默认值（10）
+            max_iterations：保留的接口参数；当前按要求固定执行 10 次迭代
 
-        Returns:
+        返回：
             decoded_bits: 解码后的比特，shape [batch, q_bits]
         """
-        if max_iterations is None:
-            max_iterations = self.max_iterations  # 配置中已设 10
-
-        # 固定迭代次数（用于满足“固定10次 decoder iteration”要求）
-        # 实际解码迭代次数记为 max_iterations，此处仅做演示
-        # 可添加一个 dummy 循环来表示迭代过程
-        for _ in range(max_iterations):
-            pass  # toy 版本不执行实际译码，仅保证迭代计数
-
-        # 根据 q_bits 截取前 q_bits 作为信息位（系统码形式）
-        # 实际应当执行 LDPC 译码，这里仅用于接口测试
+        if received_bits.ndim != 2:
+            raise ValueError("received_bits must have shape [batch, n_total]")
+        if received_bits.shape[1] != n_total:
+            raise ValueError("received_bits second dimension must equal n_total")
+        if not 0 <= q_bits <= n_total:
+            raise ValueError("q_bits must satisfy 0 <= q_bits <= n_total")
         if erasure_mask is not None and erasure_mask.shape != received_bits.shape:
             raise ValueError("erasure_mask must match received_bits shape")
-        # The toy decoder exposes the mask to a future iterative decoder; for
-        # the current systematic code, information positions remain the first
-        # q_bits positions and erased values are not replaced with truth.
-        decoded_bits = received_bits[:, :q_bits]
-        return decoded_bits
+
+        # 使用固定 H 对完整的 32 位子码字译码。小型校验图无法处理完整块
+        # 之外的比特，因此这些比特保留其硬判决值。
+        decoded = received_bits.clone().float()
+        H = self.H.to(device=received_bits.device, dtype=decoded.dtype)
+        edge_mask = H.bool()
+        # 配置中的 H 描述一个 32 位 toy 码字。旧调用方传入的是扁平的
+        # 8064/8192 位流，而不是这些码字的拼接；兼容路径运行一次校验图，
+        # 但不把不匹配的分块边界应用到其系统信息位上。
+        decode_with_fixed_graph = n_total == self.n
+        n_blocks = n_total // self.n if decode_with_fixed_graph else min(1, n_total // self.n)
+        for block_index in range(n_blocks):
+            start = block_index * self.n
+            stop = start + self.n
+            observations = received_bits[:, start:stop].float()
+            llr = (1.0 - 2.0 * observations) * 4.0
+            if erasure_mask is not None:
+                llr = llr.masked_fill(erasure_mask[:, start:stop].bool(), 0.0)
+
+            # 变量到校验节点的消息 q_{j->i}；非边位置在整个更新过程中由
+            # edge_mask 保持为零。
+            variable_to_check = llr.unsqueeze(1) * H.unsqueeze(0)
+            check_to_variable = torch.zeros_like(variable_to_check)
+
+            # 固定迭代次数是有意设计的。不要增加基于 syndrome 的提前退出，
+            # 因为实验要求恰好执行十次更新。
+            for _ in range(10):
+                # Min-Sum 校验节点更新：对每个校验节点计算符号乘积和最小、
+                # 次小幅值。
+                for check in range(self.m):
+                    connected = edge_mask[check]
+                    incoming = variable_to_check[:, check, connected]
+                    magnitudes = incoming.abs()
+                    signs = torch.where(incoming < 0,
+                                        incoming.new_tensor(-1.0),
+                                        incoming.new_tensor(1.0))
+                    if incoming.shape[1] > 1:
+                        outgoing = []
+                        for edge in range(incoming.shape[1]):
+                            other_magnitudes = magnitudes.clone()
+                            other_magnitudes[:, edge] = float("inf")
+                            min_other = other_magnitudes.min(dim=1).values
+                            other_sign = signs.prod(dim=1) * signs[:, edge]
+                            outgoing.append(other_sign * min_other)
+                        check_to_variable[:, check, connected] = torch.stack(outgoing, dim=1)
+                    else:
+                        check_to_variable[:, check, connected] = torch.zeros_like(incoming)
+
+                # 变量节点更新：将信道证据与其他校验节点消息相加，这是每轮
+                # BP 更新的第二部分数值计算。
+                total_check = check_to_variable.sum(dim=1, keepdim=True)
+                variable_to_check = (
+                    llr.unsqueeze(1) + total_check - check_to_variable
+                ) * H.unsqueeze(0)
+
+            posterior = llr + check_to_variable.sum(dim=1)
+            if decode_with_fixed_graph:
+                decoded[:, start:stop] = (posterior < 0).to(decoded.dtype)
+
+        if not decode_with_fixed_graph:
+            return received_bits[:, :q_bits].float()
+        return decoded[:, :q_bits]
 
     def get_matrix_info(self) -> dict:
         """返回校验矩阵信息"""

@@ -10,7 +10,7 @@ NumberOrArray = Union[np.ndarray, float, int]
 
 
 def _array(value: NumberOrArray) -> np.ndarray:
-    """Convert NumPy-compatible input to an ndarray without changing values."""
+    """将兼容 NumPy 的输入转换为 ndarray，且不改变数值。"""
     return np.asarray(value, dtype=float)
 
 
@@ -22,38 +22,37 @@ def _positive_denominator(value: NumberOrArray, name: str) -> np.ndarray:
 
 
 def compute_R0(success_rates: NumberOrArray) -> np.floating:
-    """Compute the probability that all roles succeed independently.
+    """计算所有角色彼此独立且均成功的概率。
 
-    Args:
-        success_rates: NumPy array of per-role success probabilities.
-    Returns:
-        NumPy scalar ``prod_k(success_rates[k])``.
+    参数：
+        success_rates：每个角色成功概率组成的 NumPy 数组。
+    返回：
+        NumPy 标量 ``prod_k(success_rates[k])``。
     """
     return np.prod(_array(success_rates))
 
 def compute_d_k(success_rate_k: NumberOrArray,
                 failure_rate_k: NumberOrArray) -> np.ndarray:
-    """Compute each role's attenuation factor ``d_k = s_k - p_e,k``."""
+    """计算每个角色的衰减因子 ``d_k = s_k - p_e,k``。"""
     return _array(success_rate_k) - _array(failure_rate_k)
 
 def compute_w_k(importance_k: NumberOrArray,
                 d_k: NumberOrArray) -> np.ndarray:
-    """Compute the role weight ``w_k = importance_k * d_k``."""
+    """计算角色权重 ``w_k = importance_k * d_k``。"""
     return _array(importance_k) * _array(d_k)
 
 def compute_p_e_k(failure_count_k: NumberOrArray,
                   total_trials: NumberOrArray) -> np.ndarray:
-    """Compute marginal error probability ``p_e,k = failures_k / trials``."""
+    """计算边缘错误概率 ``p_e,k = failures_k / trials``。"""
     return _array(failure_count_k) / _positive_denominator(total_trials, "total_trials")
 
 def compute_p_e_ij(failure_counts_i: NumberOrArray,
                    failure_counts_j: NumberOrArray,
                    simultaneous_failures: NumberOrArray,
                    total_trials: NumberOrArray) -> np.ndarray:
-    """Compute joint error probability ``p_e,ij = failures_ij / trials``.
+    """计算联合错误概率 ``p_e,ij = failures_ij / trials``。
 
-    The marginal counts are accepted to match the documented interface; the
-    joint probability itself is determined by the simultaneous count.
+    为匹配文档接口，函数接收边缘失败次数；联合概率本身由同时失败次数决定。
     """
     _ = (_array(failure_counts_i), _array(failure_counts_j))
     return _array(simultaneous_failures) / _positive_denominator(total_trials, "total_trials")
@@ -61,7 +60,7 @@ def compute_p_e_ij(failure_counts_i: NumberOrArray,
 def compute_eta_k(success_rate_k: NumberOrArray,
                   failure_rate_k: NumberOrArray,
                   total_roles: int) -> np.ndarray:
-    """Compute normalized binary uncertainty ``eta_k`` for each role."""
+    """计算每个角色的归一化二元不确定性 ``eta_k``。"""
     if total_roles <= 1:
         raise ValueError("total_roles must be greater than 1")
     eps = np.finfo(float).eps
@@ -72,18 +71,18 @@ def compute_eta_k(success_rate_k: NumberOrArray,
 
 def compute_p_u(incorrect_bits_not_erased: NumberOrArray,
                 total_bits: NumberOrArray) -> np.ndarray:
-    """Compute probability of an incorrect bit that was not erased."""
+    """计算未被擦除但错误的比特概率。"""
     return _array(incorrect_bits_not_erased) / _positive_denominator(total_bits, "total_bits")
 
 def compute_covariance(p_e_i: float, p_e_j: float, p_e_ij: float) -> float:
     """
     计算协方差项：p_e,ij - p_e,i * p_e,j
     当独立失败时，协方差项应为0
-    Args:
+    参数：
         p_e_i: 角色i的失败概率
         p_e_j: 角色j的失败概率
         p_e_ij: 同时失败概率
-    Returns:
+    返回：
         covariance: 协方差值
     """
     return p_e_ij - p_e_i * p_e_j
@@ -133,11 +132,10 @@ def create_test_fixture() -> dict:
     }
 
 def solve_lp_small_scale(constraints: dict) -> Optional[torch.Tensor]:
-    """Solve a small non-negative LP using ``scipy.optimize.linprog``.
+    """使用 ``scipy.optimize.linprog`` 求解小规模非负线性规划。
 
-    Supported keys are ``c``, optional ``A_ub/b_ub``, optional
-    ``A_eq/b_eq`` and optional ``bounds``.  The legacy ``A/b`` keys are
-    accepted as aliases for ``A_ub/b_ub``.
+    支持的键包括 ``c``、可选的 ``A_ub/b_ub``、可选的 ``A_eq/b_eq`` 和
+    可选的 ``bounds``。旧接口中的 ``A/b`` 可作为 ``A_ub/b_ub`` 的别名。
     """
     from scipy.optimize import linprog
 

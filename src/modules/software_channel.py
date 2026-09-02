@@ -11,7 +11,7 @@ class SoftwareChannel:
     def __init__(self, config_path: str = None):
         """初始化软件信道
 
-        Args:
+        参数：
             config_path: 配置文件路径
         """
         import yaml
@@ -36,7 +36,7 @@ class SoftwareChannel:
         QPSK调制下，每个符号携带2比特
         SNR(dB) = 10 * log10(信号功率 / 噪声功率)
 
-        Returns:
+        返回：
             noise_std: 噪声标准差
         """
         snr_linear = 10 ** (self.snr_db / 10.0)
@@ -55,10 +55,10 @@ class SoftwareChannel:
         - 10 -> (-1, 1) / sqrt(2)
         - 11 -> (-1, -1) / sqrt(2)
 
-        Args:
+        参数：
             bits: 输入比特，shape [batch, n_bits]
 
-        Returns:
+        返回：
             symbols: QPSK符号，shape [batch, n_symbols, 2] (实部, 虚部)
         """
         # 修正：正确提取维度（使用索引0和1获取具体数值）
@@ -72,7 +72,7 @@ class SoftwareChannel:
         # 将比特流分组为2比特一组
         bits_reshaped = bits.reshape(batch_size, n_symbols, 2)
 
-        # QPSK映射
+        # QPSK 映射
         # 实部: 1->-1, 0->1
         real_part = 1 - 2 * bits_reshaped[:, :, 0]  # [batch, n_symbols]
         # 虚部: 1->-1, 0->1
@@ -87,10 +87,10 @@ class SoftwareChannel:
     def add_awgn(self, symbols: torch.Tensor) -> torch.Tensor:
         """添加AWGN噪声
 
-        Args:
+        参数：
             symbols: QPSK符号，shape [batch, n_symbols, 2]
 
-        Returns:
+        返回：
             noisy_symbols: 加噪后的符号，shape [batch, n_symbols, 2]
         """
         noise = torch.randn_like(symbols) * self.noise_std
@@ -102,10 +102,10 @@ class SoftwareChannel:
 
         将接收到的QPSK符号解调为比特流
 
-        Args:
+        参数：
             noisy_symbols: 接收到的符号，shape [batch, n_symbols, 2]
 
-        Returns:
+        返回：
             bits: 解调后的比特，shape [batch, n_bits]
         """
         # 修正：正确提取维度
@@ -127,12 +127,12 @@ class SoftwareChannel:
                  return_soft: bool = False):
         """完整传输过程：调制 + 信道 + 解调
 
-        Args:
+        参数：
             bits: 输入比特，shape [batch, n_bits]
             snr_db: 可选的SNR值，如果提供则覆盖默认值
 
-        Returns:
-            received_bits: 接收到的比特，shape [batch, n_bits]
+        返回：
+            received_bits：接收到的比特；若 return_soft 为真，还返回含噪的 I/Q 数值
         """
         if bits.ndim != 2 or bits.shape[1] % 2:
             raise ValueError("bits must have shape [batch, even number of bits]")

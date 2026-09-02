@@ -1,6 +1,6 @@
 """
 接收器模块
-整合解码、擦除恢复和错误检测功能
+整合解码、擦除标记和错误检测功能
 """
 
 import torch
@@ -14,7 +14,7 @@ class Receiver:
     def __init__(self, config_path: str = None):
         """初始化接收器
 
-        Args:
+        参数：
             config_path: 配置文件路径
         """
         import yaml
@@ -40,15 +40,15 @@ class Receiver:
                 soft_information: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Dict]:
         """完整接收流程
 
-        Args:
+        参数：
             received_bits: 接收到的比特，shape [batch, n_total]
             n_total: 总码长
             q_bits: 期望的信息位数
-            use_erasure: 是否使用擦除恢复
+            use_erasure：是否应用额外的擦除标记
             erasure_pattern: 擦除模式（可选）
             soft_information: 信道输出的含噪I/Q软信息，shape [batch, n_total]
 
-        Returns:
+        返回：
             decoded_bits: 解码后的比特，shape [batch, q_bits]
             stats: 接收统计信息
         """
@@ -72,15 +72,15 @@ class Receiver:
             stats['erasure_mask'] = erasure_mask
             stats['erasure_count'] = erasure_mask.sum().item()
 
-            # decoder receives the mask-marked observations; no source bits are
-            # available here for an invalid recovery substitution.
+            # 将带有擦除标记的观测交给 decoder；这里没有源比特，不能进行
+            # 不合法的正确值替换。
             decoded_bits = self.decoder.decode(erased_bits, n_total, q_bits,
                                                erasure_mask=erasure_mask)
             stats['recovery_applied'] = False
         else:
             stats['erasure_applied'] = False
 
-        # 3. 擦除恢复（如果需要，且未被上面的解码失败处理覆盖）
+        # 3. 应用额外的擦除标记（如果需要，且未被上面的解码失败处理覆盖）
         if use_erasure and erasure_pattern is not None and not decoding_failed:
             erasure_mask = self.erasure.erasure_function(received_bits, soft_information)
             erasure_mask |= erasure_pattern.to(device=received_bits.device, dtype=torch.bool)
@@ -114,11 +114,11 @@ class Receiver:
         2. 解码结果全为1
         3. 解码结果与接收比特无相关性（差值过大）
 
-        Args:
+        参数：
             decoded_bits: 解码后的比特
             received_bits: 接收到的原始比特
 
-        Returns:
+        返回：
             bool: 是否解码失败
         """
         # 基本维度检查

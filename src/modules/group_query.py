@@ -1,4 +1,4 @@
-"""Grouping and query pooling for role/feature-point representations."""
+"""对角色或特征点进行分组并执行查询池化。"""
 
 from typing import Optional
 from pathlib import Path
@@ -8,7 +8,7 @@ from torch import nn
 
 
 class GroupQuery(nn.Module):
-    """Project roles, group consecutive roles, and pool one query per group."""
+    """投影角色特征，按连续位置分组，并为每组池化一个查询向量。"""
 
     def __init__(self, config_path: str = "config/toy_config.yaml"):
         super().__init__()
@@ -39,7 +39,7 @@ class GroupQuery(nn.Module):
 
     def input_to_group(self, input_tensor: torch.Tensor,
                        mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Return [batch, M, 128] role features enriched by group means."""
+        """返回融合所属分组均值后的角色特征，形状为 [batch, M, 128]。"""
         self._validate_input(input_tensor)
         if mask is not None:
             if mask.shape != input_tensor.shape[:2]:
@@ -57,13 +57,12 @@ class GroupQuery(nn.Module):
         group_valid = valid.view(-1, self.num_groups, self.group_size, 1)
         queries = (grouped * group_valid).sum(2) / group_valid.sum(2).clamp_min(1.0)
         queries_per_role = queries.repeat_interleave(self.group_size, 1)[:, :self.M]
-        # Keep role-specific information while making the actual group mean
-        # affect every role in that group.
+        # 保留角色自身信息，同时让实际的分组均值影响该组中的每个角色。
         return (projected[:, :self.M] + queries_per_role) * valid[:, :self.M]
 
     def group_to_query(self, group_representation: torch.Tensor,
                        query_indices: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Mean-pool each 16-role group, returning [batch, 8, 128]."""
+        """按 group_size 分组执行均值池化；默认返回 [batch, 8, 128]。"""
         if group_representation.ndim != 3 or group_representation.shape[-1] != self.d_model:
             raise ValueError("group_representation must be [batch, M, 128]")
         if group_representation.shape[1] == self.M:

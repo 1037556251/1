@@ -1,1 +1,1 @@
-"""Source root for the project modules."""
+"""项目模块的源代码根目录。"""
