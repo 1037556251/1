@@ -60,6 +60,20 @@ def test_all_profiles_have_8192_output_bits():
         assert encoded.shape[1] == 128 + sum(profile["n"]) == 128 + 8064
 
 
+def test_all_profiles_share_one_fixed_parity_graph():
+    """验证所有 profile 使用同一张固定尺寸、固定内容的校验图。"""
+    mother_code = MotherCode(CONFIG)
+    decoder = Receiver(CONFIG).decoder
+    assert mother_code.profile_H.shape == (1008, 1264)
+    assert decoder.profile_H.shape == (1008, 1264)
+    torch.testing.assert_close(
+        mother_code.profile_H, decoder.profile_H, rtol=0, atol=0)
+    for profile in ProfileGenerator(CONFIG).get_all_profiles():
+        assert mother_code._parity_projection(
+            max(profile["q"]), max(n - q for q, n in zip(profile["q"], profile["n"]))
+        ).shape == (256, 1008)
+
+
 def test_noiseless_round_trip_is_exact():
     """验证无穷 SNR 传输能够保留 profile 的全部信息比特。"""
     torch.manual_seed(8)

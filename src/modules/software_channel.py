@@ -24,8 +24,11 @@ class SoftwareChannel:
         # 从配置读取信道参数
         channel_config = self.config.get('channel', {})
         self.snr_db = channel_config.get('snr_db', 10.0)  # 默认SNR为10dB
-        self.random_seed = channel_config.get('random_seed', 42)
-        torch.manual_seed(int(self.random_seed))
+        self.random_seed = self.config.get('toy', {}).get(
+            'random_seed', channel_config.get('random_seed', 42))
+        # 使用信道实例自己的生成器，避免修改全局 PyTorch 随机状态。
+        self._generator = torch.Generator()
+        self._generator.manual_seed(int(self.random_seed))
         self.noise_std = self._calculate_noise_std()
         self.last_noisy_symbols = None
         self.last_soft_bits = None
@@ -93,7 +96,12 @@ class SoftwareChannel:
         返回：
             noisy_symbols: 加噪后的符号，shape [batch, n_symbols, 2]
         """
-        noise = torch.randn_like(symbols) * self.noise_std
+        noise = torch.randn(
+            symbols.shape,
+            dtype=symbols.dtype,
+            device=symbols.device,
+            generator=self._generator,
+        ) * self.noise_std
         noisy_symbols = symbols + noise
         return noisy_symbols
 

@@ -26,3 +26,14 @@ python -m pytest
 
 The suite covers structure, profile constraints, math functions, LP, coding,
 and channel behavior.
+
+## Run the complete Toy acceptance flow
+
+```bash
+python run_toy.py
+```
+
+This command validates all 13 profiles, runs the random-tensor forward demo,
+executes structure tests, and then runs the math Toy and LP constraint tests.
+It exits with a non-zero status when any stage fails and prints
+`All Toy Tests PASSED` after a successful run.

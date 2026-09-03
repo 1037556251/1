@@ -21,10 +21,16 @@ class Quantizer(nn.Module):
         self.d_model = int(model.get("d_model", 128))
         self.codec_dim = int(model.get("codec_dim", 32))
         self.codebook_size = int(model.get("codebook_size", 256))
-        self.input_projection = nn.Linear(self.d_x, self.d_model)
-        self.codec_projection = nn.Linear(self.d_model, self.codec_dim)
-        self.reconstruction_projection = nn.Linear(self.codec_dim, self.d_model)
-        self.codebook = nn.Parameter(torch.randn(self.codebook_size, self.codec_dim))
+        channel_config = config.get("channel", {})
+        self.random_seed = int(config.get("toy", {}).get(
+            "random_seed", channel_config.get("random_seed", 42)))
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(self.random_seed + 202)
+            self.input_projection = nn.Linear(self.d_x, self.d_model)
+            self.codec_projection = nn.Linear(self.d_model, self.codec_dim)
+            self.reconstruction_projection = nn.Linear(self.codec_dim, self.d_model)
+            self.codebook = nn.Parameter(
+                torch.randn(self.codebook_size, self.codec_dim))
 
     def quantize(self, input_tensor: torch.Tensor) -> torch.Tensor:
         """从 [batch, M, d_x] 或 [batch, M, 128] 返回 [batch, M, 32]。"""

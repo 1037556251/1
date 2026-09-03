@@ -23,11 +23,16 @@ class GroupQuery(nn.Module):
         self.d_x = int(model.get("d_x", 64))
         self.M = int(model.get("M", 128))
         self.group_size = int(model.get("group_size", 16))
+        channel_config = config.get("channel", {})
+        self.random_seed = int(config.get("toy", {}).get(
+            "random_seed", channel_config.get("random_seed", 42)))
         if self.M != 128:
             raise ValueError(f"GroupQuery requires M=128, got M={self.M}")
         if self.group_size <= 0:
             raise ValueError("group_size must be positive")
-        self.input_projection = nn.Linear(self.d_x, self.d_model)
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(self.random_seed + 101)
+            self.input_projection = nn.Linear(self.d_x, self.d_model)
 
     @property
     def num_groups(self) -> int:

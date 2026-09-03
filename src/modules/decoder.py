@@ -26,8 +26,18 @@ class LDPCDecoder:
 
         # 从配置读取解码器参数
         decoder_config = self.config.get('decoder', {})
+        channel_config = self.config.get('channel', {})
+        self.random_seed = int(self.config.get('toy', {}).get(
+            'random_seed', channel_config.get('random_seed', 42)))
         self.max_iterations = decoder_config.get('max_iterations', 10)
         self.algorithm = decoder_config.get('algorithm', 'LDPC')
+        # 13 个 profile 共用同一张固定尺寸的 Toy 校验图。
+        self.profile_k = 256
+        self.profile_n = 1264
+        self.profile_m = self.profile_n - self.profile_k
+        # 最短 profile 仍发送前 688 个校验位，信息节点只连接这些公共列。
+        self.profile_observed_m = 688
+        self._build_profile_graph()
 
         # 初始化与母码配置一致的固定校验矩阵
         self._build_parity_check_matrix()
@@ -38,9 +48,9 @@ class LDPCDecoder:
 
         H = np.zeros((16, 32), dtype=np.int8)
 
-        np.random.seed(42)  # 固定种子保证可复现
+        generator = np.random.RandomState(self.random_seed)
         for col in range(32):
-            rows = np.random.choice(16, 3, replace=False)
+            rows = generator.choice(16, 3, replace=False)
             H[rows, col] = 1
 
         self.H = torch.tensor(H, dtype=torch.float32)
@@ -49,15 +59,24 @@ class LDPCDecoder:
         self.m = 16  # 校验位长度
 
     def _profile_projection(self, q_bits: int, parity_bits: int) -> torch.Tensor:
-        """构造与母码 profile 编码器完全一致的确定性稀疏投影矩阵。"""
-        generator = np.random.RandomState(42 + q_bits * 1009 + parity_bits)
-        projection = np.zeros((q_bits, parity_bits), dtype=np.float32)
-        if parity_bits:
-            degree = min(3, parity_bits)
-            for row in range(q_bits):
-                columns = generator.choice(parity_bits, degree, replace=False)
-                projection[row, columns] = 1.0
-        return torch.tensor(projection, dtype=torch.float32)
+        """返回所有 profile 共用的固定 ``P``，忽略 profile 的局部尺寸。"""
+        if q_bits > self.profile_k or parity_bits > self.profile_m:
+            raise ValueError("profile codeword exceeds the common graph size")
+        return self.profile_projection
+
+    def _build_profile_graph(self) -> None:
+        """构造与母码编码器完全一致的固定稀疏校验图。"""
+        generator = np.random.RandomState(self.random_seed + 7001)
+        projection = np.zeros(
+            (self.profile_k, self.profile_m), dtype=np.float32)
+        for row in range(self.profile_k):
+            columns = generator.choice(self.profile_observed_m, 3, replace=False)
+            projection[row, columns] = 1.0
+        self.profile_projection = torch.tensor(projection, dtype=torch.float32)
+        self.profile_H = torch.cat([
+            self.profile_projection.t(),
+            torch.eye(self.profile_m, dtype=torch.float32),
+        ], dim=1)
 
     def _decode_profile_stream(self, received_bits: torch.Tensor,
                                erasure_mask: Optional[torch.Tensor],
@@ -78,22 +97,39 @@ class LDPCDecoder:
         decoded_roles = []
         offset = 0
         for q_role, n_role in zip(profile['q'], profile['n']):
-            parity_count = n_role - q_role
-            projection = self._profile_projection(q_role, parity_count).to(
+            projection = self._profile_projection(q_role, n_role - q_role).to(
                 device=payload.device, dtype=payload.dtype
             )
-            parity_check = torch.cat([
-                projection.transpose(0, 1),
-                torch.eye(parity_count, device=payload.device, dtype=payload.dtype),
-            ], dim=1)
+            parity_check = self.profile_H.to(
+                device=payload.device, dtype=payload.dtype)
             word = payload[:, offset:offset + n_role].clone()
             word_mask = payload_mask[:, offset:offset + n_role]
+            padded_word = torch.zeros(
+                payload.shape[0], self.profile_n,
+                device=payload.device, dtype=payload.dtype)
+            padded_mask = torch.ones(
+                payload.shape[0], self.profile_n,
+                device=payload.device, dtype=torch.bool)
+            padded_word[:, :n_role] = word
+            padded_mask[:, :n_role] = word_mask
+            # profile 未发送的后缀是 punctured 位置，不作为可靠观测。
+            word = padded_word
+            word_mask = padded_mask
+            # q_role 之后到统一信息长度之间是 shortening 的已知零位。
+            word_mask[:, q_role:self.profile_k] = True
             word[word_mask] = 0.0
             estimate = word
             degrees = parity_check.sum(dim=0).clamp_min(1.0)
 
             # 固定十轮更新，不根据 syndrome 提前退出。
             for _ in range(10):
+                # 用当前信息位重建 punctured 校验位，使不同 profile 使用
+                # 同一张完整校验图，而不把未发送位误当成接收错误。
+                expected_parity = torch.remainder(
+                    estimate[:, :self.profile_k].matmul(projection), 2.0)
+                missing_parity = word_mask[:, self.profile_k:]
+                estimate[:, self.profile_k:] = torch.where(
+                    missing_parity, expected_parity, estimate[:, self.profile_k:])
                 syndrome = torch.remainder(estimate.matmul(parity_check.t()), 2.0)
                 votes = syndrome.matmul(parity_check)
                 # 单错时 syndrome 等于校验矩阵的一列，优先进行精确定位。
@@ -104,6 +140,7 @@ class LDPCDecoder:
                 has_exact_match = exact_match.any(dim=1, keepdim=True)
                 vote_flip = votes * 2.0 >= degrees.unsqueeze(0)
                 flip = torch.where(has_exact_match, exact_match, vote_flip)
+                flip &= ~word_mask
                 estimate = torch.where(flip, 1.0 - estimate, estimate)
 
             decoded_roles.append(estimate[:, :q_role])

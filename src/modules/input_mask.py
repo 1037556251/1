@@ -27,6 +27,11 @@ class InputMask:
         self.K = self.config['toy']['K']
         self.d_x = self.config['toy']['d_x']
         self.batch = self.config['toy']['batch']
+        channel_config = self.config.get('channel', {})
+        self.random_seed = int(self.config['toy'].get(
+            'random_seed', channel_config.get('random_seed', 42)))
+        self._generator = torch.Generator()
+        self._generator.manual_seed(self.random_seed)
 
     def generate_random_tensor(self, batch_size: Optional[int] = None) -> torch.Tensor:
         """生成随机输入 tensor
@@ -40,7 +45,8 @@ class InputMask:
         if batch_size is None:
             batch_size = self.batch
 
-        return torch.randn(batch_size, self.M, self.d_x)
+        return torch.randn(
+            batch_size, self.M, self.d_x, generator=self._generator)
 
     def generate_source_mask(self,
                              profile: Dict,

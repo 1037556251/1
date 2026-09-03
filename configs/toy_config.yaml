@@ -12,6 +12,7 @@ toy:
   d_x: 64                 # 输入特征维度（所有模块统一从配置读取）
   hidden_dim: 128         # 内部统一投影维度
   codec_dim: 32           # 输出codec vector维度
+  random_seed: 42         # 所有随机组件的统一基础种子
 
 
 # 母码参数（用于 LDPC 编码）

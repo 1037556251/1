@@ -26,6 +26,9 @@ class MotherCode:
 
         # 从配置读取母码参数
         mc = self.config['mother_code']
+        channel_config = self.config.get('channel', {})
+        self.random_seed = int(self.config.get('toy', {}).get(
+            'random_seed', channel_config.get('random_seed', 42)))
         self.k = mc['k']
         self.n = mc['n']
         self.m = self.n - self.k
@@ -35,6 +38,13 @@ class MotherCode:
 
         self.K = self.config['toy']['K']
         self.max_iterations = self.config['decoder']['max_iterations']
+        # 所有 8192 位 profile 共用这张固定尺寸的 Toy 校验图。
+        self.profile_k = 256
+        self.profile_n = 1264
+        self.profile_m = self.profile_n - self.profile_k
+        # 最短 profile 仍发送前 688 个校验位，信息节点只连接这些公共列。
+        self.profile_observed_m = 688
+        self._build_profile_parity_projection()
 
     # def __init__(self, config_path: str = "config/toy_config.yaml"):
     # """初始化母码接口
@@ -55,24 +65,32 @@ class MotherCode:
         n = self.n
         m = self.m  # 校验位个数 = n - k
         H = np.zeros((m, n), dtype=np.int8)
-        np.random.seed(42)
+        generator = np.random.RandomState(self.random_seed)
         # 每列随机选3个1（保持稀疏性）
         for col in range(n):
-            rows = np.random.choice(m, 3, replace=False)
+            rows = generator.choice(m, 3, replace=False)
             H[rows, col] = 1
         self.H = H
 
     def _parity_projection(self, q_bits: int, parity_bits: int) -> torch.Tensor:
-        """返回用于 H=[P.T | I] 的确定性稀疏矩阵 P。"""
-        if q_bits <= 0 or parity_bits < 0:
-            raise ValueError("q_bits must be positive and parity_bits non-negative")
-        generator = np.random.RandomState(42 + q_bits * 1009 + parity_bits)
-        p = np.zeros((q_bits, parity_bits), dtype=np.int8)
-        if parity_bits:
-            degree = min(3, parity_bits)
-            for row in range(q_bits):
-                p[row, generator.choice(parity_bits, degree, replace=False)] = 1
-        return torch.tensor(p, dtype=torch.float32)
+        """返回所有 profile 共用的固定 ``P``，忽略 profile 的局部尺寸。"""
+        if q_bits > self.profile_k or parity_bits > self.profile_m:
+            raise ValueError("profile codeword exceeds the common graph size")
+        return self.profile_projection
+
+    def _build_profile_parity_projection(self) -> None:
+        """构造所有 profile 和角色共享的稀疏投影矩阵。"""
+        generator = np.random.RandomState(self.random_seed + 7001)
+        projection = np.zeros(
+            (self.profile_k, self.profile_m), dtype=np.int8)
+        for row in range(self.profile_k):
+            columns = generator.choice(self.profile_observed_m, 3, replace=False)
+            projection[row, columns] = 1
+        self.profile_projection = torch.tensor(projection, dtype=torch.float32)
+        self.profile_H = torch.cat([
+            self.profile_projection.t(),
+            torch.eye(self.profile_m, dtype=torch.float32),
+        ], dim=1)
 
     @staticmethod
     def _profile_header(profile_id: int, device: torch.device,
@@ -111,12 +129,17 @@ class MotherCode:
         for q_bits, n_bits in zip(q_list, n_list):
             information = source_bits[:, source_offset:source_offset + q_bits]
             source_offset += q_bits
-            parity_count = n_bits - q_bits
-            P = self._parity_projection(q_bits, parity_count).to(
+            P = self._parity_projection(q_bits, n_bits - q_bits).to(
                 device=source_bits.device, dtype=source_bits.dtype
             )
-            parity = torch.remainder(information.matmul(P), 2)
-            encoded_roles.append(torch.cat([information, parity], dim=1))
+            padded_information = torch.zeros(
+                source_bits.shape[0], self.profile_k,
+                device=source_bits.device, dtype=source_bits.dtype)
+            padded_information[:, :q_bits] = information
+            parity = torch.remainder(padded_information.matmul(P), 2)
+            full_codeword = torch.cat([padded_information, parity], dim=1)
+            # n_k 是统一母图码字的发送前缀，未发送后缀即 puncturing。
+            encoded_roles.append(full_codeword[:, :n_bits])
 
         header = self._profile_header(profile_id, source_bits.device, source_bits.dtype)
         header = header.unsqueeze(0).expand(source_bits.shape[0], -1)
@@ -140,10 +163,17 @@ class MotherCode:
         for q_bits, n_bits in zip(q_list, n_list):
             word = encoded_bits[:, offset:offset + n_bits]
             offset += n_bits
-            parity_count = n_bits - q_bits
-            P = self._parity_projection(q_bits, parity_count).to(encoded_bits)
-            expected = torch.remainder(word[:, :q_bits].matmul(P), 2)
-            valid &= torch.all(word[:, q_bits:] == expected, dim=1)
+            P = self._parity_projection(q_bits, n_bits - q_bits).to(encoded_bits)
+            information = torch.zeros(
+                word.shape[0], self.profile_k,
+                device=word.device, dtype=word.dtype)
+            information[:, :min(self.profile_k, n_bits)] = word[:, :min(
+                self.profile_k, n_bits)]
+            expected = torch.cat([
+                information,
+                torch.remainder(information.matmul(P), 2),
+            ], dim=1)[:, :n_bits]
+            valid &= torch.all(word == expected, dim=1)
         return valid
     # def _build_fixed_parity_check_matrix(self):
     #     """构建小型固定校验矩阵
