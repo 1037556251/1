@@ -1,8 +1,10 @@
-"""实现 ISRC E2-T 定义的风险统计量和小规模线性规划接口。"""
+"""
+数学函数：实现文档1要求的R0、d_k、w_k、p_e,k、p_e,ij、eta_k、p_u
+"""
 
 import torch
 import numpy as np
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 NumberOrArray = Union[np.ndarray, float, int]
 
@@ -15,75 +17,62 @@ def _array(value: NumberOrArray) -> np.ndarray:
 def _positive_denominator(value: NumberOrArray, name: str) -> np.ndarray:
     denominator = _array(value)
     if np.any(denominator <= 0):
-        raise ValueError(f"{name} 必须为正数")
+        raise ValueError(f"{name} must be positive")
     return denominator
 
 
-def compute_R0(error_free_losses: NumberOrArray) -> np.floating:
-    """计算无错误回放下各帧损失 ``ell_t`` 的平均值 ``R0``。"""
-    return np.mean(_array(error_free_losses))
+def compute_R0(success_rates: NumberOrArray) -> np.floating:
+    """计算所有角色彼此独立且均成功的概率。
 
-def compute_d_k(erasure_losses_k: NumberOrArray,
-                error_free_losses: NumberOrArray) -> np.ndarray:
-    """计算逐帧擦除风险增量 ``d_{t,k}=[ell_t(erasure{k})-ell_t]_+``。"""
-    return np.maximum(_array(erasure_losses_k) - _array(error_free_losses), 0.0)
+    参数：
+        success_rates：每个角色成功概率组成的 NumPy 数组。
+    返回：
+        NumPy 标量 ``prod_k(success_rates[k])``。
+    """
+    return np.prod(_array(success_rates))
 
-def compute_w_k(d_k: NumberOrArray,
-                sample_weights: Optional[NumberOrArray] = None) -> np.ndarray:
-    """计算角色权重 ``w_k=E[d_{t,k}]``，可选按帧加权。"""
-    values = _array(d_k)
-    if sample_weights is None:
-        return np.mean(values)
-    weights = _array(sample_weights)
-    if values.shape != weights.shape:
-        raise ValueError("d_k 与 sample_weights 的形状必须一致")
-    denominator = np.sum(weights)
-    if denominator <= 0:
-        raise ValueError("sample_weights 的总和必须为正数")
-    return np.sum(values * weights) / denominator
+def compute_d_k(success_rate_k: NumberOrArray,
+                failure_rate_k: NumberOrArray) -> np.ndarray:
+    """计算每个角色的衰减因子 ``d_k = s_k - p_e,k``。"""
+    return _array(success_rate_k) - _array(failure_rate_k)
 
-def compute_p_e_k(error_events_k: NumberOrArray,
-                  total_trials: Optional[NumberOrArray] = None) -> np.ndarray:
-    """计算角色擦除事件 ``E_{t,k}`` 的概率。"""
-    events = _array(error_events_k)
-    if total_trials is None:
-        return np.mean(events > 0)
-    return events / _positive_denominator(total_trials, "total_trials")
+def compute_w_k(importance_k: NumberOrArray,
+                d_k: NumberOrArray) -> np.ndarray:
+    """计算角色权重 ``w_k = importance_k * d_k``。"""
+    return _array(importance_k) * _array(d_k)
 
-def compute_p_e_ij(error_events_i: NumberOrArray,
-                   error_events_j: NumberOrArray,
-                   simultaneous_failures: Optional[NumberOrArray] = None,
-                   total_trials: Optional[NumberOrArray] = None) -> np.ndarray:
-    """计算同一帧事件的联合擦除概率，而不是边缘概率的乘积。"""
-    if simultaneous_failures is None:
-        events_i = _array(error_events_i)
-        events_j = _array(error_events_j)
-        if events_i.shape != events_j.shape:
-            raise ValueError("两个角色的事件数组形状必须一致")
-        return np.mean((events_i > 0) & (events_j > 0))
-    if total_trials is None:
-        raise ValueError("提供 simultaneous_failures 时必须提供 total_trials")
+def compute_p_e_k(failure_count_k: NumberOrArray,
+                  total_trials: NumberOrArray) -> np.ndarray:
+    """计算边缘错误概率 ``p_e,k = failures_k / trials``。"""
+    return _array(failure_count_k) / _positive_denominator(total_trials, "total_trials")
+
+def compute_p_e_ij(failure_counts_i: NumberOrArray,
+                   failure_counts_j: NumberOrArray,
+                   simultaneous_failures: NumberOrArray,
+                   total_trials: NumberOrArray) -> np.ndarray:
+    """计算联合错误概率 ``p_e,ij = failures_ij / trials``。
+
+    为匹配文档接口，函数接收边缘失败次数；联合概率本身由同时失败次数决定。
+    """
+    _ = (_array(failure_counts_i), _array(failure_counts_j))
     return _array(simultaneous_failures) / _positive_denominator(total_trials, "total_trials")
 
-def compute_eta_k(error_events_k: NumberOrArray,
-                  d_k: NumberOrArray,
-                  total_roles: Optional[int] = None) -> np.ndarray:
-    """计算依赖修正项 ``eta_k=|Cov(E_{t,k},d_{t,k})|``。"""
-    events = _array(error_events_k)
-    values = _array(d_k)
-    if events.shape != values.shape:
-        raise ValueError("error_events_k 与 d_k 的形状必须一致")
-    events = (events > 0).astype(float)
-    return np.abs(np.mean((events - np.mean(events)) *
-                          (values - np.mean(values))))
+def compute_eta_k(success_rate_k: NumberOrArray,
+                  failure_rate_k: NumberOrArray,
+                  total_roles: int) -> np.ndarray:
+    """计算每个角色的归一化二元不确定性 ``eta_k``。"""
+    if total_roles <= 1:
+        raise ValueError("total_roles must be greater than 1")
+    eps = np.finfo(float).eps
+    success = np.clip(_array(success_rate_k), eps, 1.0)
+    failure = np.clip(_array(failure_rate_k), eps, 1.0)
+    entropy = -(success * np.log2(success) + failure * np.log2(failure))
+    return entropy / np.log2(total_roles)
 
 def compute_p_u(incorrect_bits_not_erased: NumberOrArray,
-                total_bits: Optional[NumberOrArray] = None) -> np.ndarray:
-    """计算未擦除但仍被接收端使用的错误位事件概率 ``p_u``。"""
-    errors = _array(incorrect_bits_not_erased)
-    if total_bits is None:
-        return np.mean(errors > 0)
-    return errors / _positive_denominator(total_bits, "total_bits")
+                total_bits: NumberOrArray) -> np.ndarray:
+    """计算未被擦除但错误的比特概率。"""
+    return _array(incorrect_bits_not_erased) / _positive_denominator(total_bits, "total_bits")
 
 def compute_covariance(p_e_i: float, p_e_j: float, p_e_ij: float) -> float:
     """

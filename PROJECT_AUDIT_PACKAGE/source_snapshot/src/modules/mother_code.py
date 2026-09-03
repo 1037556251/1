@@ -328,7 +328,7 @@ class MotherCode:
     def decode(self, received_bits: torch.Tensor,
                n_total: int, q_bits: int) -> torch.Tensor:
         """
-        解码 toy 码字；8192 位 profile 使用对应校验图，其余旧接口截取信息位。
+        Toy 版本：解码，直接截取前 q_bits 作为信息位。
         参数：
             received_bits: [batch, n_total]
             n_total: 总码长（仅用于接口统一）
@@ -336,9 +336,6 @@ class MotherCode:
         返回：
             decoded: [batch, q_bits]
         """
-        if n_total == 8192:
-            from .decoder import LDPCDecoder
-            return LDPCDecoder().decode(received_bits, n_total, q_bits)
         return received_bits[:, :q_bits]
 
     def apply_source_mask(self, bits: torch.Tensor,

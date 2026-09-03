@@ -1,0 +1,57 @@
+{
+  "run_id": "audit_20260903T103738Z",
+  "timestamp": "2026-09-03T10:37:38.489681+00:00",
+  "code_version": "cf5262658ed8cb7f0dbe2c4739447938f32b5292",
+  "config": "configs\\toy_config.yaml",
+  "config_sha256": "40bc1b1dfd1d65e043560b37cba563446c97367d81f439bb934d297329f9e9c1",
+  "seed": {
+    "input": 123,
+    "channel": 42
+  },
+  "entry_command": "python reproduce/audit_all.py",
+  "input": [
+    2,
+    128,
+    64
+  ],
+  "output": [
+    2,
+    8192
+  ],
+  "runtime": "NOT AVAILABLE",
+  "environment": {
+    "python": "3.8.10",
+    "platform": "win32"
+  },
+  "status": "PASS",
+  "log_location": "logs/audit_pytest.log",
+  "raw_result": "results_raw/audit_minimal_pipeline.json",
+  "processed_result": "results_processed/audit_minimal_pipeline_summary.json",
+  "determinism": {
+    "runs": 3,
+    "equal": true,
+    "hashes": [
+      [
+        "e2803c0eb0e64d5cb659f773b604a548f24f8d5ad22b60e7d58ce126e9512f3d",
+        "9bf1f985cd4a27cf404d1840afcc328cb2a02dbe39e480c671e1b511af8a2184",
+        "3513befc65b05cc67b51083068dab254feb4a04fd8d37f841e990620d1aabe53",
+        "f0362f2d5b142eab332ccf05b5dbe573190d2157e4936a860a4e72fc65fc50b2",
+        "b7531ec3c88938608429161fb123f36c0c9be894f50e4279d7ac33407a05dd26"
+      ],
+      [
+        "e2803c0eb0e64d5cb659f773b604a548f24f8d5ad22b60e7d58ce126e9512f3d",
+        "9bf1f985cd4a27cf404d1840afcc328cb2a02dbe39e480c671e1b511af8a2184",
+        "3513befc65b05cc67b51083068dab254feb4a04fd8d37f841e990620d1aabe53",
+        "f0362f2d5b142eab332ccf05b5dbe573190d2157e4936a860a4e72fc65fc50b2",
+        "b7531ec3c88938608429161fb123f36c0c9be894f50e4279d7ac33407a05dd26"
+      ],
+      [
+        "e2803c0eb0e64d5cb659f773b604a548f24f8d5ad22b60e7d58ce126e9512f3d",
+        "9bf1f985cd4a27cf404d1840afcc328cb2a02dbe39e480c671e1b511af8a2184",
+        "3513befc65b05cc67b51083068dab254feb4a04fd8d37f841e990620d1aabe53",
+        "f0362f2d5b142eab332ccf05b5dbe573190d2157e4936a860a4e72fc65fc50b2",
+        "b7531ec3c88938608429161fb123f36c0c9be894f50e4279d7ac33407a05dd26"
+      ]
+    ]
+  }
+}

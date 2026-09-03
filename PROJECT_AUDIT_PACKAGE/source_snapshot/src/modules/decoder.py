@@ -48,72 +48,6 @@ class LDPCDecoder:
         self.k = 16  # 信息位长度
         self.m = 16  # 校验位长度
 
-    def _profile_projection(self, q_bits: int, parity_bits: int) -> torch.Tensor:
-        """构造与母码 profile 编码器完全一致的确定性稀疏投影矩阵。"""
-        generator = np.random.RandomState(42 + q_bits * 1009 + parity_bits)
-        projection = np.zeros((q_bits, parity_bits), dtype=np.float32)
-        if parity_bits:
-            degree = min(3, parity_bits)
-            for row in range(q_bits):
-                columns = generator.choice(parity_bits, degree, replace=False)
-                projection[row, columns] = 1.0
-        return torch.tensor(projection, dtype=torch.float32)
-
-    def _decode_profile_stream(self, received_bits: torch.Tensor,
-                               erasure_mask: Optional[torch.Tensor],
-                               profile_id: int, q_bits: int) -> torch.Tensor:
-        """使用 profile 校验图对 8192 位码流执行固定十轮 bit-flipping 译码。"""
-        from .profile_generator import ProfileGenerator
-
-        profile = ProfileGenerator().get_profile(profile_id)
-        if sum(profile['n']) + 128 != received_bits.shape[1]:
-            raise ValueError("profile header does not match received bit length")
-
-        payload = received_bits[:, 128:].float().clamp(0.0, 1.0)
-        if erasure_mask is None:
-            payload_mask = torch.zeros_like(payload, dtype=torch.bool)
-        else:
-            payload_mask = erasure_mask[:, 128:].bool()
-
-        decoded_roles = []
-        offset = 0
-        for q_role, n_role in zip(profile['q'], profile['n']):
-            parity_count = n_role - q_role
-            projection = self._profile_projection(q_role, parity_count).to(
-                device=payload.device, dtype=payload.dtype
-            )
-            parity_check = torch.cat([
-                projection.transpose(0, 1),
-                torch.eye(parity_count, device=payload.device, dtype=payload.dtype),
-            ], dim=1)
-            word = payload[:, offset:offset + n_role].clone()
-            word_mask = payload_mask[:, offset:offset + n_role]
-            word[word_mask] = 0.0
-            estimate = word
-            degrees = parity_check.sum(dim=0).clamp_min(1.0)
-
-            # 固定十轮更新，不根据 syndrome 提前退出。
-            for _ in range(10):
-                syndrome = torch.remainder(estimate.matmul(parity_check.t()), 2.0)
-                votes = syndrome.matmul(parity_check)
-                # 单错时 syndrome 等于校验矩阵的一列，优先进行精确定位。
-                exact_match = torch.all(
-                    syndrome.unsqueeze(1) == parity_check.t().unsqueeze(0),
-                    dim=2,
-                )
-                has_exact_match = exact_match.any(dim=1, keepdim=True)
-                vote_flip = votes * 2.0 >= degrees.unsqueeze(0)
-                flip = torch.where(has_exact_match, exact_match, vote_flip)
-                estimate = torch.where(flip, 1.0 - estimate, estimate)
-
-            decoded_roles.append(estimate[:, :q_role])
-            offset += n_role
-
-        decoded = torch.cat(decoded_roles, dim=1)
-        if decoded.shape[1] != q_bits:
-            raise ValueError("profile information length does not match q_bits")
-        return decoded
-
     def decode(self, received_bits: torch.Tensor,
                n_total: int, q_bits: int,
                max_iterations: Optional[int] = None,
@@ -138,20 +72,6 @@ class LDPCDecoder:
             raise ValueError("q_bits must satisfy 0 <= q_bits <= n_total")
         if erasure_mask is not None and erasure_mask.shape != received_bits.shape:
             raise ValueError("erasure_mask must match received_bits shape")
-
-        # 8192 位 profile 码流先解析头部，再使用同一 profile 校验图译码。
-        if n_total == 8192 and received_bits.shape[1] >= 128:
-            header = received_bits[:, :32].round().clamp(0.0, 1.0)
-            weights = torch.tensor(
-                [2 ** (31 - index) for index in range(32)],
-                device=received_bits.device,
-                dtype=header.dtype,
-            )
-            profile_id = int(torch.round((header[0] * weights).sum()).item())
-            if 0 <= profile_id < 13:
-                return self._decode_profile_stream(
-                    received_bits, erasure_mask, profile_id, q_bits
-                )
 
         # 使用固定 H 对完整的 32 位子码字译码。小型校验图无法处理完整块
         # 之外的比特，因此这些比特保留其硬判决值。

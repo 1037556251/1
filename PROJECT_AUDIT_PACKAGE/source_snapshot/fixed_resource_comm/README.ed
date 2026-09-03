@@ -1,0 +1,51 @@
+项目创建时间：2026-08-22（星期六，UTC+8）
+项目路径：E:\bci\pythonProject\fixed_resource_comm
+
+fixed_resource_comm/
+├── config/
+│   └── toy_config.yaml          # 示例配置文件
+├── fixtures/
+│   ├── __init__.py
+│   └── math_functions.py        # 数学工具函数（如矩阵、向量操作）
+├── modules/
+│   ├── __init__.py
+│   ├── decoder.py               # 解码器模块
+│   ├── erasure.py               # 擦除信道模拟
+│   ├── group_query.py           # 分组查询机制
+│   ├── input_mask.py            # 输入掩码生成
+│   ├── mother_code.py           # 母码生成器
+│   ├── profile_generator.py     # 性能分析/配置生成器
+│   ├── quantizer.py             # 量化模块
+│   ├── receiver.py              # 接收端处理
+│   └── software_channel.py      # 软件信道模拟（含噪声、延迟等）
+├── tests/
+│   ├── __init__.py
+│   ├── test_decoder_erasure.py  # 解码+擦除联合测试
+│   ├── test_end_to_end.py       # 端到端系统测试
+│   ├── test_math_toys.py        # 数学工具函数测试
+│   ├── test_mother_code.py      # 母码生成测试
+│   ├── test_profile_generator.py# 性能配置生成测试
+│   ├── test_software_channel.py # 软件信道测试
+│   └── test_structure.py        # 结构/接口一致性测试
+├── .gitignore                   # Git 忽略文件配置
+├── __init__.py                  # 包初始化文件
+├── demo.py                      # 快速演示脚本
+├── full_system_demo.py          # 完整系统运行演示
+├── README.md                    # 本文件（推荐使用 .md）
+├── requirements.txt             # 依赖包列表
+├── run_all_tests.py             # 一键运行所有测试
+└── test.py                      # 单文件测试入口（可选）
+
+
+
+安装依赖
+pip install -r requirements.txt
+
+转到项目路径
+cd .\fixed_resource_comm\
+
+运行演示
+python demo.py
+
+运行全部测试
+python run_all_tests.py

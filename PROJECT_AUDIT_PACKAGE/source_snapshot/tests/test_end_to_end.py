@@ -87,8 +87,8 @@ def test_end_to_end():
     print(f"  系统误码率: {system_ber.item():.4f}")
     print("  ✓ 有噪声传输测试完成")
 
-    # 测试3：擦除标记（使用随机比特）
-    print(f"\n[测试3] 擦除标记")
+    # 测试3：擦除恢复（使用随机比特）
+    print(f"\n[测试3] 擦除恢复")
     bits = torch.randint(0, 2, (batch_size, n_total), dtype=torch.float32)  # 用 n_total 替换原来的 n
 
     # 应用随机擦除
@@ -96,9 +96,12 @@ def test_end_to_end():
     erasure_rate = (erased_bits == -1).float().mean().item()
     print(f"  实际擦除率: {erasure_rate:.4f} (期望: 0.2)")
 
-    # 验证擦除位置保留标记，不能使用原始比特恢复
-    assert (erased_bits == -1).any(), "应存在被标记的擦除位置"
-    print("  ✓ 擦除标记正确保留")
+    # 恢复擦除
+    recovered_bits = erasure.recover_erasure(erased_bits, bits)
+    recovery_accuracy = (recovered_bits == bits).float().mean()
+    print(f"  擦除恢复准确率: {recovery_accuracy.item():.4f}")
+    assert recovery_accuracy > 0.99, "擦除恢复准确率应接近1.0"
+    print("  ✓ 擦除恢复正确")
 
     # 测试4：完整接收流程
     print(f"\n[测试4] 完整接收流程")

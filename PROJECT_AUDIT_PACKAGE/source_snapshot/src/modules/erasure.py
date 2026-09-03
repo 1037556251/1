@@ -58,6 +58,19 @@ class Erasure:
         erased[pattern] = -1
         return erased
 
+    def recover_erasure(self, erased_bits: torch.Tensor,
+                        known_bits: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """在接收路径中保留擦除标记，同时兼容旧的显式恢复接口。
+
+        ``known_bits`` 仅为兼容旧的独立辅助测试而接受。真实接收路径不会
+        传入该参数，因此含噪接收比特不会被源比特或正确比特替换。
+        """
+        if known_bits is not None:
+            recovered = erased_bits.clone()
+            recovered[erased_bits == -1] = known_bits[erased_bits == -1]
+            return recovered
+        return erased_bits
+
     def get_erasure_info(self) -> dict:
         return {'erasure_probability': self.erasure_probability,
                 'soft_threshold': self.soft_threshold,

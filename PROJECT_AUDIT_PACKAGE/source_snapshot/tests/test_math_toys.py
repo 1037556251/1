@@ -139,26 +139,25 @@ def test_all_math_functions():
     print("\n[测试4] 所有数学函数基本测试")
     print("=" * 40)
 
-    # 测试无错误帧损失的平均值 R0
-    error_free_losses = np.array([0.0, 0.5, 1.0, 0.5])
-    R0 = compute_R0(error_free_losses)
-    expected_R0 = 0.5
+    # 测试R0
+    success_rates = torch.tensor([0.95, 0.90, 0.85, 0.80])
+    R0 = compute_R0(success_rates)
+    expected_R0 = 0.95 * 0.90 * 0.85 * 0.80
     print(f"  R0 = {R0:.4f} (期望: {expected_R0:.4f})")
-    assert abs(R0 - expected_R0) < 1e-6, f"R0误差过大: {abs(R0 - expected_R0)}"
+    assert abs(R0.item() - expected_R0) < 1e-6, f"R0误差过大: {abs(R0.item() - expected_R0)}"
 
-    # 测试逐帧风险增量 d_k
-    d_k = compute_d_k(np.array([0.4, 0.2]), np.array([0.1, 0.3]))
-    print(f"  d_k 均值 = {compute_w_k(d_k):.4f} (期望: 0.1500)")
-    np.testing.assert_almost_equal(d_k, np.array([0.3, 0.0]))
+    # 测试d_k
+    d_k = compute_d_k(0.95, 0.05)
+    print(f"  d_k = {d_k:.4f} (期望: 0.90)")
+    assert abs(d_k - 0.90) < 1e-10
 
-    # 测试角色权重 w_k=E[d_k]
-    w_k = compute_w_k(d_k)
-    print(f"  w_k = {w_k:.4f} (期望: 0.1500)")
-    assert abs(w_k - 0.15) < 1e-10
+    # 测试w_k
+    w_k = compute_w_k(1.0, 0.90)
+    print(f"  w_k = {w_k:.4f} (期望: 0.90)")
+    assert abs(w_k - 0.90) < 1e-10
 
-    # 测试同帧协方差修正项 eta_k
-    eta_k = compute_eta_k(np.array([0, 0, 1, 1]),
-                          np.array([0.0, 0.0, 1.0, 1.0]))
+    # 测试eta_k
+    eta_k = compute_eta_k(0.95, 0.05, 4)
     print(f"  eta_k = {eta_k:.4f}")
     assert 0 <= eta_k <= 1, "eta_k应在[0,1]范围内"
 

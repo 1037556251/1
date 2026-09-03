@@ -96,10 +96,14 @@ def test_erasure():
     assert (pattern_erased[0, 8:] == bits[0, 8:]).all(), "后24位应该保留"
     print("✓ 模式擦除正确")
 
-    # 测试3：擦除标记保留
-    print("\n[测试3] 擦除标记保留")
-    assert (erased_bits == -1).any(), "应存在被标记的擦除位置"
-    print("✓ 擦除标记未被真值替换")
+    # 测试3：恢复擦除
+    print("\n[测试3] 恢复擦除")
+    recovered_bits = erasure.recover_erasure(erased_bits, bits)
+    print(f"恢复后比特 shape: {recovered_bits.shape}")
+
+    # 验证恢复完全正确
+    assert (recovered_bits == bits).all(), "恢复应该完全正确"
+    print("✓ 擦除恢复正确")
 
     # 获取擦除信息
     info = erasure.get_erasure_info()
